@@ -5,7 +5,7 @@ namespace OnlineBanking.Controllers;
 
 public interface ICreateFinancialTransacionRequest
 {
-    FinancialTransaction ToFinancialTransaction();
+    FinancialTransaction CreateFinancialTransaction(DateTimeOffset dateTimeOffsetNow);
 }
 
 public static class Requests
@@ -13,15 +13,18 @@ public static class Requests
 	public record CreateDeposit(
         Guid ReceiverId,
         decimal Amount,
+        string Currency,
         DepositDetails? Details,
         string? Comment) : ICreateFinancialTransacionRequest
     {
-		public FinancialTransaction ToFinancialTransaction()
+		public FinancialTransaction CreateFinancialTransaction(DateTimeOffset dateTimeOffsetNow)
 			=> FinancialTransaction.CreateDeposit(
 				Guid.NewGuid(),
 				ReceiverId,
 				Amount,
-				Details,
+                Currency,
+                dateTimeOffsetNow,
+                Details,
 				Comment);
 
     }
@@ -29,14 +32,17 @@ public static class Requests
 	public record CreateWithdrawal(
         Guid SenderId,
         decimal Amount,
+        string Currency,
         WithdrwalDetails? Details,
         string? Comment) : ICreateFinancialTransacionRequest
     {
-        public FinancialTransaction ToFinancialTransaction()
+        public FinancialTransaction CreateFinancialTransaction(DateTimeOffset dateTimeOffsetNow)
             => FinancialTransaction.CreateWithdrawal(
                 Guid.NewGuid(),
                 SenderId,
                 Amount,
+                Currency,
+                dateTimeOffsetNow,
                 Details,
                 Comment);
     }
@@ -45,16 +51,25 @@ public static class Requests
         Guid SenderId,
         Guid ReceiverId,
         decimal Amount,
+        string Currency,
         TransferDetails? Details,
         string? Comment) : ICreateFinancialTransacionRequest
     {
-        public FinancialTransaction ToFinancialTransaction()
+        public FinancialTransaction CreateFinancialTransaction(DateTimeOffset dateTimeOffsetNow)
             => FinancialTransaction.CreateTransfer(
                 Guid.NewGuid(),
                 SenderId,
                 ReceiverId,
                 Amount,
+                Currency,
+                dateTimeOffsetNow,
                 Details,
                 Comment);
+    }
+
+    public enum UserTransactionType
+    {
+        Incomming,
+        Outcomming
     }
 }

@@ -11,6 +11,8 @@ public interface IFinancialTransactionRepository
 
     Task<IReadOnlyCollection<FinancialTransaction>> GetAllIncommingTransactions(Guid userId);
 
+    Task<IReadOnlyCollection<FinancialTransaction>> GetAllOutcommingTransactions(Guid userId);
+
     Task DeleteAsync(Guid id);
 }
 

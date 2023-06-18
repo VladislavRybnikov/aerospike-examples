@@ -2,6 +2,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Mvc;
 using OnlineBanking.Domain;
+using static OnlineBanking.Controllers.Requests;
 
 namespace OnlineBanking.Controllers;
 
@@ -37,14 +38,6 @@ public class TransactionsController : ControllerBase
         return HandleAsync(request);
     }
 
-    [HttpPut("{id}/status")]
-    [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> UpdateSatatus(Guid id, [FromBody] FinancialTransactionStatus status)
-	{
-		await _repository.UpdateStatusAsync(id, status);
-		return Ok(await _repository.GetByIdAsync(id));
-	}
-
 	[HttpGet("{id}")]
     [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
     public async Task<IActionResult> Get(Guid id)
@@ -52,16 +45,39 @@ public class TransactionsController : ControllerBase
         return Ok(await _repository.GetByIdAsync(id));
     }
 
-	[HttpGet]
+    [HttpPost("{id}/process")]
+    [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> Process(Guid id)
+    {
+        return Ok("TODO");
+    }
+
+    [HttpPost("{id}/complete")]
+    [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> Complete(Guid id)
+    {
+        return Ok("TODO");
+    }
+
+    [HttpPost("{id}/cancel")]
+    [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> Cancel(Guid id)
+    {
+        return Ok("TODO");
+    }
+
+    [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<FinancialTransaction>), (int)HttpStatusCode.OK)]
-    public async Task<IActionResult> GetAllByUserId([FromQuery] Guid userId)
+    public async Task<IActionResult> GetAllByUserId([FromQuery] Guid userId, [FromQuery] UserTransactionType type)
 	{
-		return Ok(await _repository.GetAllIncommingTransactions(userId));
+		return Ok(type == UserTransactionType.Incomming
+            ? await _repository.GetAllIncommingTransactions(userId)
+            : await _repository.GetAllOutcommingTransactions(userId));
 	}
 
     private async Task<IActionResult> HandleAsync(ICreateFinancialTransacionRequest request)
     {
-        var transaction = request.ToFinancialTransaction();
+        var transaction = request.CreateFinancialTransaction(DateTimeOffset.UtcNow);
         await _repository.InsertAsync(transaction);
         return Ok(transaction.Id);
     }

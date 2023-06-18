@@ -26,10 +26,12 @@
     <None Remove="OneOf" />
     <None Remove="Domain\FinancialTransactionDetails\" />
     <None Remove="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
+    <None Remove="Domain\Errors\" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Domain\" />
     <Folder Include="Persistance\" />
     <Folder Include="Domain\FinancialTransactionDetails\" />
+    <Folder Include="Domain\Errors\" />
   </ItemGroup>
 </Project>

@@ -33,8 +33,15 @@ public class RecordsAsyncResult : RecordSequenceListener, IAsyncEnumerator<Recor
     {
         if (_exception != null) throw _exception;
         Record? record = null;
-        if (_completed && !_channel.Reader.TryRead(out record)) return false;
-        Current = record ?? await _channel.Reader.ReadAsync();
+        try
+        {
+            if (_completed && !_channel.Reader.TryRead(out record)) return false;
+            Current = record ?? await _channel.Reader.ReadAsync();
+        }
+        catch
+        {
+            return false;
+        }
         return true;
     }
 

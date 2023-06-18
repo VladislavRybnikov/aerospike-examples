@@ -28,7 +28,26 @@ public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepo
         var statement = new Statement();
         statement.SetNamespace(_aerospikeOptions.Namespace);
         statement.SetSetName(_aerospikeOptions.Sets!.Transactions);
-        statement.SetFilter(Filter.Equal("ReceiverId", userId.ToString()));
+        statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.ReceiverId), userId.ToString()));
+
+        var recordsAsyncResult = new RecordsAsyncResult();
+        _aerospikeClient.Query(null, recordsAsyncResult, statement);
+
+        var result = new List<FinancialTransaction>();
+        await foreach (var record in recordsAsyncResult)
+        {
+            result.Add(ToFinancialTransaction(record)!);
+        }
+
+        return result;
+    }
+
+    public async Task<IReadOnlyCollection<FinancialTransaction>> GetAllOutcommingTransactions(Guid userId)
+    {
+        var statement = new Statement();
+        statement.SetNamespace(_aerospikeOptions.Namespace);
+        statement.SetSetName(_aerospikeOptions.Sets!.Transactions);
+        statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.SenderId), userId.ToString()));
 
         var recordsAsyncResult = new RecordsAsyncResult();
         _aerospikeClient.Query(null, recordsAsyncResult, statement);
@@ -58,7 +77,7 @@ public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepo
     public async Task UpdateStatusAsync(Guid id, FinancialTransactionStatus status)
     {
         var writePolicy = new WritePolicy() { recordExistsAction = RecordExistsAction.UPDATE_ONLY };
-        var statusBin = new Bin("Status", status.ToString());
+        var statusBin = new Bin(nameof(FinancialTransaction.Status), status.ToString());
 
         await _aerospikeClient.Put(writePolicy, CancellationToken.None, GetKey(id), statusBin);
     }
@@ -69,16 +88,16 @@ public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepo
 
         IEnumerable<Bin> GetBinsEnumerable()
         {
-            yield return new Bin("Id", transaction.Id.ToString());
-            yield return new Bin("ReceiverId", transaction.ReceiverId.ToString());
-            yield return new Bin("SenderId", transaction.SenderId.ToString());
-            yield return new Bin("Status", transaction.Status.ToString());
+            yield return new Bin(nameof(FinancialTransaction.Id), transaction.Id.ToString());
+            yield return new Bin(nameof(FinancialTransaction.ReceiverId), transaction.ReceiverId.ToString());
+            yield return new Bin(nameof(FinancialTransaction.SenderId), transaction.SenderId.ToString());
+            yield return new Bin(nameof(FinancialTransaction.Status), transaction.Status.ToString());
 
             var data = JObject.FromObject(transaction);
-            data.Remove("Id");
-            data.Remove("ReceiverId");
-            data.Remove("SenderId");
-            data.Remove("Status");
+            data.Remove(nameof(FinancialTransaction.Id));
+            data.Remove(nameof(FinancialTransaction.ReceiverId));
+            data.Remove(nameof(FinancialTransaction.SenderId));
+            data.Remove(nameof(FinancialTransaction.Status));
 
             yield return new Bin("Data", data.ToString());
         }
