@@ -3,7 +3,7 @@
 public enum SourceType
 {
     Terminal,
-    InternalTransfer,
-    ExternalTransfer
+    InternalAccount,
+    ExternalAccount
 }
 

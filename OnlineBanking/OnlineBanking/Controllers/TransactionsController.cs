@@ -16,16 +16,28 @@ public class TransactionsController : ControllerBase
         _repository = repository;
     }
 
-	[HttpPost]
+	[HttpPost("deposit")]
 	[ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
-	public async Task<IActionResult> Create(FinancialTransaction transaction)
+	public Task<IActionResult> Create(Requests.CreateDeposit request)
 	{
-		transaction = transaction with { Id = Guid.NewGuid() };
-		await _repository.InsertAsync(transaction);
-		return Ok(transaction.Id);
-	}
+        return HandleAsync(request);
+    }
 
-	[HttpPut("{id}/status")]
+    [HttpPost("withdrawal")]
+    [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
+    public Task<IActionResult> Create(Requests.CreateWithdrawal request)
+    {
+        return HandleAsync(request);
+    }
+
+    [HttpPost("transfer")]
+    [ProducesResponseType(typeof(string), (int)HttpStatusCode.OK)]
+    public Task<IActionResult> Create(Requests.CreateTransfer request)
+    {
+        return HandleAsync(request);
+    }
+
+    [HttpPut("{id}/status")]
     [ProducesResponseType(typeof(FinancialTransaction), (int)HttpStatusCode.OK)]
     public async Task<IActionResult> UpdateSatatus(Guid id, [FromBody] FinancialTransactionStatus status)
 	{
@@ -46,5 +58,11 @@ public class TransactionsController : ControllerBase
 	{
 		return Ok(await _repository.GetAllIncommingTransactions(userId));
 	}
-}
 
+    private async Task<IActionResult> HandleAsync(ICreateFinancialTransacionRequest request)
+    {
+        var transaction = request.ToFinancialTransaction();
+        await _repository.InsertAsync(transaction);
+        return Ok(transaction.Id);
+    }
+}

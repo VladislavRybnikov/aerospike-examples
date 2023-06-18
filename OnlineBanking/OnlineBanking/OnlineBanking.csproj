@@ -13,6 +13,8 @@
     <PackageReference Include="Aerospike.Client" Version="6.0.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Polly" Version="7.2.4" />
+    <PackageReference Include="OneOf" Version="3.0.243" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="7.0.7" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,9 +23,13 @@
     <None Remove="Aerospike.Client" />
     <None Remove="Newtonsoft.Json" />
     <None Remove="Polly" />
+    <None Remove="OneOf" />
+    <None Remove="Domain\FinancialTransactionDetails\" />
+    <None Remove="Microsoft.AspNetCore.Mvc.NewtonsoftJson" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Domain\" />
     <Folder Include="Persistance\" />
+    <Folder Include="Domain\FinancialTransactionDetails\" />
   </ItemGroup>
 </Project>
