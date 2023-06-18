@@ -1,0 +1,23 @@
+﻿version: "3.3"
+services:
+
+  onlinebanking:    
+    container_name: onlinebanking
+    environment:
+        Aerospike__Host: "aerospike"
+    build:      
+      dockerfile: Dockerfile
+    depends_on: [aerospike]
+    restart: unless-stopped    
+    ports:
+      - "5100:5100"
+
+  aerospike:
+    image: "aerospike:ce-6.3.0.1"
+    container_name: aerospike   
+    environment:
+      AS_HOST: "aerospike"
+      AS_PORT: "3000"
+      NAMESPACE: "onlineBanking"
+    ports:
+      - "3000:3000"
