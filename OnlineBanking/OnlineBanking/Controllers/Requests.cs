@@ -8,6 +8,11 @@ public interface ICreateFinancialTransacionRequest
     FinancialTransaction CreateFinancialTransaction(DateTimeOffset dateTimeOffsetNow);
 }
 
+public interface ICreateUserRequest
+{
+    User CreateUser(DateTimeOffset dateTimeOffsetNow);
+}
+
 public static class Requests
 {
 	public record CreateDeposit(
@@ -65,6 +70,24 @@ public static class Requests
                 dateTimeOffsetNow,
                 Details,
                 Comment);
+    }
+
+    public record RegisterUser(
+        string Name,
+        string Email,
+        string AccountNumber,
+        string AccountCurrency
+        ) : ICreateUserRequest
+    {
+        public User CreateUser(DateTimeOffset dateTimeOffsetNow)
+            => User.CreateWithSingleAccount(
+                Guid.NewGuid(),
+                Name,
+                Email,
+                Guid.NewGuid(),
+                AccountNumber,
+                AccountCurrency,
+                dateTimeOffsetNow);
     }
 
     public enum UserTransactionType

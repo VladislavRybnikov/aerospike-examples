@@ -15,4 +15,6 @@ public class AerospikeOptions
 public class AerospikeSets
 {
 	public string? Transactions { get; set; }
+
+	public string? Users { get; set; }
 }

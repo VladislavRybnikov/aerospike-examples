@@ -14,11 +14,6 @@ public record FinancialTransactionError : DomainError
 		return new(DomainErrorType.NotFound, "Unknonwn user.");
 	}
 
-    public static FinancialTransactionError InvalidFinancialTransactionType()
-    { 
-        return new(DomainErrorType.BadRequest, "Invalid transaction type.");
-    }
-
     public static FinancialTransactionError InvalidOperation(string? details = null)
     {
         return new(

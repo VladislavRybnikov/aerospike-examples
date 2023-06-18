@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json.Converters;
 using OnlineBanking.Domain;
+using OnlineBanking.Domain.Repositories;
 using OnlineBanking.Persistance;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.Configure<AerospikeOptions>(builder.Configuration.GetSection("Aerospike"));
 builder.Services.AddScoped<IFinancialTransactionRepository, AerospikeFinancialTransactionRepository>();
+builder.Services.AddScoped<IUserRepository, AerospikeUserRepository>();
 builder.Services.AddSingleton<AerospikeSetup>();
 
 var app = builder.Build();

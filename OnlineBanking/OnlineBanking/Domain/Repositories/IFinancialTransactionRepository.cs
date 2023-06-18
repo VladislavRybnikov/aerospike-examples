@@ -1,5 +1,5 @@
 ﻿using System;
-namespace OnlineBanking.Domain;
+namespace OnlineBanking.Domain.Repositories;
 
 public interface IFinancialTransactionRepository
 {
@@ -7,7 +7,7 @@ public interface IFinancialTransactionRepository
 
     Task<FinancialTransaction?> GetByIdAsync(Guid id);
 
-    Task UpdateStatusAsync(Guid id, FinancialTransactionStatus status);
+    Task UpdateAsync(FinancialTransaction transaction);
 
     Task<IReadOnlyCollection<FinancialTransaction>> GetAllIncommingTransactions(Guid userId);
 

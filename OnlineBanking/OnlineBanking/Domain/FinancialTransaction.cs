@@ -3,19 +3,31 @@ using OnlineBanking.Domain.FinancialTransactionDetails;
 
 namespace OnlineBanking.Domain;
 
-public record FinancialTransaction(
-    Guid Id,
-    Guid? SenderId,
-    Guid? ReceiverId,
-    decimal Amount,
-    string Currency,
-    FinancialTransactionType Type,
-    Details Details,
-    string? Comment,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt)
-{
+public record FinancialTransaction
+{ 
+    public Guid Id { get; set; }
+
+    public Guid? SenderId { get; set; }
+
+    public Guid? ReceiverId { get; set; }
+
+    public decimal Amount { get; set; }
+
+    public string? Currency { get; set; }
+
+    public FinancialTransactionType Type { get; set; }
+
+    public Details? Details { get; set; }
+
+    public string? Comment { get; set; }
+
     public FinancialTransactionStatus Status { get; set; } = FinancialTransactionStatus.Created;
+
+    public DateTime UpdatedAt { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DomainError? Error { get; set; }
 
     public static FinancialTransaction CreateDeposit(
         Guid id,
@@ -26,7 +38,19 @@ public record FinancialTransaction(
         DepositDetails? details = null,
         string? comment = null)
     {
-        return new(id, null, receiverId, amount, currency, FinancialTransactionType.Deposit, new(details), comment, createdAt, createdAt);
+        return new FinancialTransaction
+        {
+            Id = id,
+            SenderId = null,
+            ReceiverId = receiverId,
+            Amount = amount,
+            Currency = currency,
+            Type = FinancialTransactionType.Deposit,
+            Details = new(details),
+            Comment = comment,
+            CreatedAt = createdAt.UtcDateTime,
+            UpdatedAt = createdAt.UtcDateTime
+        };
     }
 
     public static FinancialTransaction CreateWithdrawal(
@@ -38,7 +62,19 @@ public record FinancialTransaction(
         WithdrwalDetails? details = null,
         string? comment = null)
     {
-        return new(id, senderId, null, amount, currency, FinancialTransactionType.Withdrawal, new(details), comment, createdAt, createdAt);
+        return new FinancialTransaction
+        {
+            Id = id,
+            SenderId = senderId,
+            ReceiverId = null,
+            Amount = amount,
+            Currency = currency,
+            Type = FinancialTransactionType.Deposit,
+            Details = new(details),
+            Comment = comment,
+            CreatedAt = createdAt.UtcDateTime,
+            UpdatedAt = createdAt.UtcDateTime
+        };
     }
 
     public static FinancialTransaction CreateTransfer(
@@ -51,121 +87,150 @@ public record FinancialTransaction(
         TransferDetails? details = null,
         string? comment = null)
     {
-        return new(id, senderId, receiverId, amount, currency, FinancialTransactionType.Transfer, new(details), comment, createdAt, createdAt);
+        return new FinancialTransaction
+        {
+            Id = id,
+            SenderId = senderId,
+            ReceiverId = receiverId,
+            Amount = amount,
+            Currency = currency,
+            Type = FinancialTransactionType.Deposit,
+            Details = new(details),
+            Comment = comment,
+            CreatedAt = createdAt.UtcDateTime,
+            UpdatedAt = createdAt.UtcDateTime
+        };
     }
 
-    public OneOf<FinancialTransactionStatus, DomainError> Start(User? receiver, User? sender)
+    public OneOf<FinancialTransactionStatus, DomainError> BeginProcessing(User? receiver, User? sender, DateTimeOffset updatedAt)
     {
-        return Type switch
+        return (Type, Status) switch
         {
-            FinancialTransactionType.Deposit => CompleteDeposit(receiver),
-            FinancialTransactionType.Withdrawal or FinancialTransactionType.Transfer => StartWithdrawalOrTransfer(sender),
-            _ => FinancialTransactionError.InvalidFinancialTransactionType()
+            (_, FinancialTransactionStatus.Processing) => StatusAlreadyProcessed(),
+            (FinancialTransactionType.Deposit, FinancialTransactionStatus.Created) => CompleteDeposit(receiver),
+            (FinancialTransactionType.Withdrawal or FinancialTransactionType.Transfer, FinancialTransactionStatus.Created) => BeginWithdrawalOrTransfer(sender),
+            _ => FinancialTransactionError.InvalidOperation()
         };
 
         OneOf<FinancialTransactionStatus, DomainError> CompleteDeposit(User? receiver)
         {
-            if (receiver is null) return FinancialTransactionError.UnknownUser();
-            if (receiver.DepositToCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
+            if (receiver is null) return FailTransaction(FinancialTransactionError.UnknownUser(), updatedAt);
+            if (receiver.DepositToCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _))
             {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
+                return FailTransaction(error, updatedAt);
             }
-            Status = FinancialTransactionStatus.Completed;
-            return Status;
+            return CompleteTransaction(updatedAt);
         }
 
-        OneOf<FinancialTransactionStatus, DomainError> StartWithdrawalOrTransfer(User? sender)
+        OneOf<FinancialTransactionStatus, DomainError> BeginWithdrawalOrTransfer(User? sender)
         {
             if (sender is null) return FinancialTransactionError.UnknownUser();
-            if (sender.HoldFromCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
+            if (sender.HoldFromCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _))
             {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
+                return FailTransaction(error, updatedAt);
             }
-            Status = FinancialTransactionStatus.Processing;
-            return Status;
+            return BeginTransaction(updatedAt);
         }
     }
 
-    public OneOf<FinancialTransactionStatus, DomainError> Complete(User? receiver, User? sender)
+    public OneOf<FinancialTransactionStatus, DomainError> Complete(User? receiver, User? sender, DateTimeOffset updatedAt)
     {
-        return Type switch
+        return (Type, Status) switch
         {
-            FinancialTransactionType.Deposit => AlreadyCompleted(),
-            FinancialTransactionType.Withdrawal => CompleteWithdrawal(sender),
-            FinancialTransactionType.Transfer => CompleteTransfer(receiver, sender),
-            _ => FinancialTransactionError.InvalidFinancialTransactionType()
+            (FinancialTransactionType.Deposit, FinancialTransactionStatus.Completed) => StatusAlreadyProcessed(),
+            (FinancialTransactionType.Withdrawal, FinancialTransactionStatus.Processing) => CompleteWithdrawal(sender),
+            (FinancialTransactionType.Transfer, FinancialTransactionStatus.Processing) => CompleteTransfer(receiver, sender),
+            _ => FinancialTransactionError.InvalidOperation()
         };
 
         OneOf<FinancialTransactionStatus, DomainError> CompleteWithdrawal(User? sender)
         {
-            if (sender is null) return FinancialTransactionError.UnknownUser();
-            if (sender.WithdrawFromCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
+            if (sender is null) return FailTransaction(FinancialTransactionError.UnknownUser(), updatedAt);
+            if (sender.WithdrawFromCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _))
             {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
+                return FailTransaction(error, updatedAt);
             }
-            Status = FinancialTransactionStatus.Completed;
-            return Status;
+            return CompleteTransaction(updatedAt);
         }
 
         OneOf<FinancialTransactionStatus, DomainError> CompleteTransfer(User? receiver, User? sender)
         {
-            if (sender is null || receiver is null) return FinancialTransactionError.UnknownUser();
-            if (sender.WithdrawFromCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
+            if (sender is null || receiver is null) return FailTransaction(FinancialTransactionError.UnknownUser(), updatedAt);
+
+            if (sender.WithdrawFromCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _)
+                || receiver.DepositToCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out error, out _))
             {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
+                return FailTransaction(error, updatedAt);
             }
 
-            if (receiver.DepositToCurrencyAccount(Amount, Currency).TryPickT1(out error, out _))
-            {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
-            }
-
-            Status = FinancialTransactionStatus.Completed;
-            return Status;
+            return CompleteTransaction(updatedAt);
         }
-
-        FinancialTransactionStatus AlreadyCompleted() => Status;
     }
 
-    public OneOf<FinancialTransactionStatus, DomainError> Cancel(User? receiver, User? sender)
+    public OneOf<FinancialTransactionStatus, DomainError> Cancel(User? receiver, User? sender, DateTimeOffset updatedAt)
     {
-        return Type switch
+        return (Type, Status) switch
         {
-            FinancialTransactionType.Deposit => FinancialTransactionError.InvalidOperation("Deposit cancel is not supported"),
-            FinancialTransactionType.Withdrawal => CancelWithdrawal(sender),
-            FinancialTransactionType.Transfer => CancelTransfer(receiver, sender),
-            _ => FinancialTransactionError.InvalidFinancialTransactionType()
+            (_, FinancialTransactionStatus.Canceled) => StatusAlreadyProcessed(),
+            (FinancialTransactionType.Withdrawal, FinancialTransactionStatus.Created or FinancialTransactionStatus.Processing) => CancelWithdrawal(sender),
+            (FinancialTransactionType.Transfer, FinancialTransactionStatus.Created or FinancialTransactionStatus.Processing) => CancelTransfer(receiver, sender),
+            _ => FinancialTransactionError.InvalidOperation()
         };
 
         OneOf<FinancialTransactionStatus, DomainError> CancelWithdrawal(User? sender)
         {
-            if (sender is null) return FinancialTransactionError.UnknownUser();
-            if (sender.UnHoldFromCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
-            {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
-            }
-            Status = FinancialTransactionStatus.Canceled;
-            return Status;
+            if (sender is null) return FailTransaction(FinancialTransactionError.UnknownUser(), updatedAt);
+
+            if (sender.UnHoldFromCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _))
+                return FailTransaction(error, updatedAt);
+
+            return CancelTransaction(updatedAt);
         }
 
         OneOf<FinancialTransactionStatus, DomainError> CancelTransfer(User? receiver, User? sender)
         {
             if (sender is null || receiver is null) return FinancialTransactionError.UnknownUser();
-            if (sender.UnHoldFromCurrencyAccount(Amount, Currency).TryPickT1(out var error, out _))
-            {
-                Status = FinancialTransactionStatus.Failed;
-                return error;
-            }
 
-            Status = FinancialTransactionStatus.Canceled;
-            return Status;
+            if (sender.UnHoldFromCurrencyAccount(Amount, Currency, updatedAt).TryPickT1(out var error, out _))
+                return FailTransaction(error, updatedAt);
+
+            return CancelTransaction(updatedAt);
         }
     }
+
+    private FinancialTransactionStatus UpdateStatus(FinancialTransactionStatus status, DateTimeOffset updatedAt)
+    {
+        UpdatedAt = updatedAt.UtcDateTime;
+        Status = status;
+
+        return Status;
+    }
+
+    private FinancialTransactionStatus BeginTransaction(DateTimeOffset updatedAt)
+    {
+        return UpdateStatus(FinancialTransactionStatus.Processing, updatedAt);
+    }
+
+    private FinancialTransactionStatus CancelTransaction(DateTimeOffset updatedAt)
+    {
+        return UpdateStatus(FinancialTransactionStatus.Canceled, updatedAt);
+    }
+
+    private FinancialTransactionStatus CompleteTransaction(DateTimeOffset updatedAt)
+    {
+        return UpdateStatus(FinancialTransactionStatus.Completed, updatedAt);
+    }
+
+    private DomainError FailTransaction(DomainError error, DateTimeOffset updatedAt)
+    {
+        UpdatedAt = updatedAt.UtcDateTime;
+        Status = FinancialTransactionStatus.Failed;
+        Error = error;
+
+        return error;
+    }
+
+
+    private FinancialTransactionStatus StatusAlreadyProcessed() => Status;
 }
 

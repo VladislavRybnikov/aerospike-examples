@@ -1,42 +1,42 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Transactions;
 using Aerospike.Client;
 using Microsoft.Extensions.Options;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OnlineBanking.Domain;
+using OnlineBanking.Domain.Repositories;
 
 namespace OnlineBanking.Persistance;
 
-public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepository
+public class AerospikeFinancialTransactionRepository : BaseAerospikeRepository<FinancialTransaction>, IFinancialTransactionRepository
 {
-    private readonly AsyncClient _aerospikeClient;
-    private readonly AerospikeOptions _aerospikeOptions;
-
-    public AerospikeFinancialTransactionRepository(IOptions<AerospikeOptions> options)
+    public AerospikeFinancialTransactionRepository(IOptions<AerospikeOptions> options) : base(options)
     {
-        var host = new Aerospike.Client.Host(options.Value.Host, options.Value.Port);
-        _aerospikeClient = new AsyncClient(null, host);
-        _aerospikeOptions = options.Value;
     }
+
+    protected override string Set => AerospikeOptions.Sets!.Transactions!;
 
     public async Task DeleteAsync(Guid id)
     {
-        await _aerospikeClient.Delete(null, CancellationToken.None, GetKey(id));
+        await AerospikeClient.Delete(null, CancellationToken.None, GetKey(id));
     }
 
     public async Task<IReadOnlyCollection<FinancialTransaction>> GetAllIncommingTransactions(Guid userId)
     {
         var statement = new Statement();
-        statement.SetNamespace(_aerospikeOptions.Namespace);
-        statement.SetSetName(_aerospikeOptions.Sets!.Transactions);
+        statement.SetNamespace(AerospikeOptions.Namespace);
+        statement.SetSetName(Set);
         statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.ReceiverId), userId.ToString()));
 
         var recordsAsyncResult = new RecordsAsyncResult();
-        _aerospikeClient.Query(null, recordsAsyncResult, statement);
+        AerospikeClient.Query(null, recordsAsyncResult, statement);
 
         var result = new List<FinancialTransaction>();
         await foreach (var record in recordsAsyncResult)
         {
-            result.Add(ToFinancialTransaction(record)!);
+            result.Add(ToModel(record)!);
         }
 
         return result;
@@ -45,17 +45,17 @@ public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepo
     public async Task<IReadOnlyCollection<FinancialTransaction>> GetAllOutcommingTransactions(Guid userId)
     {
         var statement = new Statement();
-        statement.SetNamespace(_aerospikeOptions.Namespace);
-        statement.SetSetName(_aerospikeOptions.Sets!.Transactions);
+        statement.SetNamespace(AerospikeOptions.Namespace);
+        statement.SetSetName(Set);
         statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.SenderId), userId.ToString()));
 
         var recordsAsyncResult = new RecordsAsyncResult();
-        _aerospikeClient.Query(null, recordsAsyncResult, statement);
+        AerospikeClient.Query(null, recordsAsyncResult, statement);
 
         var result = new List<FinancialTransaction>();
         await foreach (var record in recordsAsyncResult)
         {
-            result.Add(ToFinancialTransaction(record)!);
+            result.Add(ToModel(record)!);
         }
 
         return result;
@@ -64,56 +64,52 @@ public class AerospikeFinancialTransactionRepository : IFinancialTransactionRepo
     public async Task<FinancialTransaction?> GetByIdAsync(Guid id)
     {
         var policy = new Policy() { socketTimeout = 300 };
-        var record = await _aerospikeClient.Get(policy, CancellationToken.None, GetKey(id));
-        return ToFinancialTransaction(record);
+        var record = await AerospikeClient.Get(policy, CancellationToken.None, GetKey(id));
+        return ToModel(record);
     }
 
     public async Task InsertAsync(FinancialTransaction transaction)
     {
         var writePolicy = new WritePolicy() { sendKey = true, recordExistsAction = RecordExistsAction.CREATE_ONLY };
-        await _aerospikeClient.Put(writePolicy, CancellationToken.None, GetKey(transaction), GetBins(transaction));
+        await AerospikeClient.Put(writePolicy, CancellationToken.None, GetKey(transaction), GetBins(transaction));
     }
 
-    public async Task UpdateStatusAsync(Guid id, FinancialTransactionStatus status)
+    public async Task UpdateAsync(FinancialTransaction transaction)
     {
         var writePolicy = new WritePolicy() { recordExistsAction = RecordExistsAction.UPDATE_ONLY };
-        var statusBin = new Bin(nameof(FinancialTransaction.Status), status.ToString());
 
-        await _aerospikeClient.Put(writePolicy, CancellationToken.None, GetKey(id), statusBin);
-    }
-
-    private static Bin[] GetBins(FinancialTransaction transaction)
-    {
-        return GetBinsEnumerable().ToArray();
-
-        IEnumerable<Bin> GetBinsEnumerable()
+        IEnumerable<Bin> BinsToUpdate()
         {
-            yield return new Bin(nameof(FinancialTransaction.Id), transaction.Id.ToString());
-            yield return new Bin(nameof(FinancialTransaction.ReceiverId), transaction.ReceiverId.ToString());
-            yield return new Bin(nameof(FinancialTransaction.SenderId), transaction.SenderId.ToString());
             yield return new Bin(nameof(FinancialTransaction.Status), transaction.Status.ToString());
-
-            var data = JObject.FromObject(transaction);
-            data.Remove(nameof(FinancialTransaction.Id));
-            data.Remove(nameof(FinancialTransaction.ReceiverId));
-            data.Remove(nameof(FinancialTransaction.SenderId));
-            data.Remove(nameof(FinancialTransaction.Status));
-
-            yield return new Bin("Data", data.ToString());
+            yield return new Bin(nameof(FinancialTransaction.UpdatedAt), JsonConvert.SerializeObject(transaction.UpdatedAt));
+            if (transaction.Error != null)
+            {
+                yield return new Bin(nameof(FinancialTransaction.Error), JsonConvert.SerializeObject(transaction.Error));
+            }
         }
+
+        await AerospikeClient.Put(writePolicy, CancellationToken.None, GetKey(transaction), BinsToUpdate().ToArray());
     }
 
-    private static FinancialTransaction? ToFinancialTransaction(Record record)
+    protected override IEnumerable<Bin> GetFixedBins(FinancialTransaction transaction)
     {
-        var data = JObject.Parse(record.bins["Data"].ToString()!);
-        foreach (var bin in record.bins)
+        yield return new Bin(nameof(FinancialTransaction.Id), transaction.Id.ToString());
+        yield return new Bin(nameof(FinancialTransaction.ReceiverId), transaction.ReceiverId.ToString());
+        yield return new Bin(nameof(FinancialTransaction.SenderId), transaction.SenderId.ToString());
+        yield return new Bin(nameof(FinancialTransaction.Status), transaction.Status.ToString());
+        yield return new Bin(nameof(FinancialTransaction.CreatedAt), JsonConvert.SerializeObject(transaction.CreatedAt));
+        yield return new Bin(nameof(FinancialTransaction.UpdatedAt), JsonConvert.SerializeObject(transaction.UpdatedAt));
+        if (transaction.Error != null)
         {
-            data.TryAdd(bin.Key, bin.Value.ToString());
+            yield return new Bin(nameof(FinancialTransaction.Error), JsonConvert.SerializeObject(transaction.Error));
         }
-        return data.ToObject<FinancialTransaction>();
     }
 
-    private Key GetKey(Guid transactionId) => new Key(_aerospikeOptions.Namespace, _aerospikeOptions.Sets!.Transactions, transactionId.ToString());
+    protected override IEnumerable<string> GetJsonBins()
+    {
+        yield return nameof(FinancialTransaction.Error);
+    }
+
     private Key GetKey(FinancialTransaction transaction) => GetKey(transaction.Id);
 }
 
