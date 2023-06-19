@@ -22,6 +22,11 @@ builder.Services.AddScoped<IFinancialTransactionRepository, AerospikeFinancialTr
 builder.Services.AddScoped<IUserRepository, AerospikeUserRepository>();
 builder.Services.AddSingleton<AerospikeSetup>();
 
+builder.Services.AddCors(x => x.AddDefaultPolicy(p => p
+    .AllowAnyOrigin()
+    .AllowAnyMethod()
+    .AllowAnyHeader()));
+
 var app = builder.Build();
 
 var aerospikeSetup = app.Services.GetRequiredService<AerospikeSetup>();
@@ -30,7 +35,9 @@ aerospikeSetup.Setup();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseAuthorization();
+app.UseRouting();
+
+app.UseCors();
 
 app.MapControllers();
 
