@@ -34,4 +34,12 @@ public class UsersController : ControllerBase
         var user = await _repository.GetByIdAsync(id);
         return user == null ? NotFound() : Ok(user);
     }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(User), (int)HttpStatusCode.OK)]
+    public async Task<IActionResult> GetAll()
+    {
+        var users = await _repository.GetAllAsync();
+        return Ok(users);
+    }
 }

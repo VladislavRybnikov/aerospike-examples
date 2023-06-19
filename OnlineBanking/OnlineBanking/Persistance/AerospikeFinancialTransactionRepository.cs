@@ -25,18 +25,12 @@ public class AerospikeFinancialTransactionRepository : BaseAerospikeRepository<F
 
     public async Task<IReadOnlyCollection<FinancialTransaction>> GetAllIncommingTransactions(Guid userId)
     {
-        var statement = new Statement();
-        statement.SetNamespace(AerospikeOptions.Namespace);
-        statement.SetSetName(Set);
-        statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.ReceiverId), userId.ToString()));
-
-        var recordsAsyncResult = new RecordsAsyncResult();
-        AerospikeClient.Query(null, recordsAsyncResult, statement);
+        var filter = Filter.Equal(nameof(FinancialTransaction.ReceiverId), userId.ToString());
 
         var result = new List<FinancialTransaction>();
-        await foreach (var record in recordsAsyncResult)
+        await foreach (var model in QueryModelsAsync(s => s.SetFilter(filter)))
         {
-            result.Add(ToModel(record)!);
+            result.Add(model);
         }
 
         return result;
@@ -44,18 +38,12 @@ public class AerospikeFinancialTransactionRepository : BaseAerospikeRepository<F
 
     public async Task<IReadOnlyCollection<FinancialTransaction>> GetAllOutcommingTransactions(Guid userId)
     {
-        var statement = new Statement();
-        statement.SetNamespace(AerospikeOptions.Namespace);
-        statement.SetSetName(Set);
-        statement.SetFilter(Filter.Equal(nameof(FinancialTransaction.SenderId), userId.ToString()));
-
-        var recordsAsyncResult = new RecordsAsyncResult();
-        AerospikeClient.Query(null, recordsAsyncResult, statement);
+        var filter = Filter.Equal(nameof(FinancialTransaction.SenderId), userId.ToString());
 
         var result = new List<FinancialTransaction>();
-        await foreach (var record in recordsAsyncResult)
+        await foreach (var model in QueryModelsAsync(s => s.SetFilter(filter)))
         {
-            result.Add(ToModel(record)!);
+            result.Add(model);
         }
 
         return result;

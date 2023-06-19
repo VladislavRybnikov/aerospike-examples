@@ -7,6 +7,8 @@ public interface IUserRepository
 
     Task<User?> GetByIdAsync(Guid userId);
 
+    Task<IReadOnlyCollection<User>> GetAllAsync();
+
     Task UpdateAsync(User user);
 }
 

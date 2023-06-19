@@ -19,6 +19,17 @@ public class AerospikeUserRepository : BaseAerospikeRepository<User>, IUserRepos
 
     protected override string Set => AerospikeOptions.Sets!.Users!;
 
+    public async Task<IReadOnlyCollection<User>> GetAllAsync()
+    {
+        var result = new List<User>();
+        await foreach (var model in QueryModelsAsync())
+        {
+            result.Add(model);
+        }
+
+        return result;
+    }
+
     public async Task<User?> GetByIdAsync(Guid userId)
     {
         var policy = new Policy() { socketTimeout = 300 };
